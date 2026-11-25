@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Soil — Precision Agriculture & IoT Soil Monitoring</title>
+    <!-- Google Fonts: Inter & Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Plus Jakarta Sans', 'sans-serif'],
+                    },
+                    colors: {
+                        agro: {
+                            50: '#ecfdf5',
+                            100: '#d1fae5',
+                            500: '#10b981',
+                            600: '#059669',
+                            700: '#047857',
+                            800: '#065f46',
+                            900: '#064e3b',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Kustomisasi scrollbar & transisi halus */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        .gauge-transition {
+            transition: stroke-dashoffset 0.6s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.4s ease;
+        }
+        input[type="range"] {
+            accent-color: #059669;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased selection:bg-emerald-200 selection:text-emerald-900">
+
+    <!-- Toast Notification Container (Pengganti alert()) -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Top Navigation / Header -->
+    <header class="bg-slate-900 text-white sticky top-0 z-40 shadow-lg border-b border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <!-- Brand & Connection Status -->
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-gradient-to-br from-emerald-500/25 to-teal-500/20 border border-emerald-500/40 p-2.5 rounded-xl text-emerald-400 shadow-inner">
+                            <i data-lucide="sprout" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h1 class="font-display font-extrabold text-lg sm:text-xl tracking-tight text-white">Smart Soil</h1>
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-mono font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+                                    <i data-lucide="cpu" class="w-3 h-3 text-emerald-400"></i>
+                                    SmartSoil-Node-01
+                                </span>
+                                <span id="connection-badge" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                                    <span id="connection-text">MQTT/HTTP Live</span>
+                                </span>
+                            </div>
+                            <p class="text-xs text-slate-400 mt-0.5">Precision Agriculture &amp; IoT Soil Monitoring</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Control Bar: Komoditas, Luas Lahan, Mode Sensor & ESP32 -->
+                <div class="flex flex-wrap items-center gap-2 sm:gap-2.5">
+                    <!-- Pilihan Komoditas -->
+                    <div class="flex items-center bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5">
+                        <i data-lucide="wheat" class="w-4 h-4 text-emerald-400 mr-2 shrink-0"></i>
+                        <label for="crop-select" class="sr-only">Komoditas</label>
+                        <select id="crop-select" class="bg-transparent text-sm font-medium text-white focus:outline-none cursor-pointer pr-1">
+                            <option value="padi" class="bg-slate-800">Padi Sawah</option>
+                            <option value="cabai" class="bg-slate-800">Cabai Merah</option>
+                            <option value="jagung" class="bg-slate-800">Jagung Hibrida</option>
+                            <option value="tomat" class="bg-slate-800">Tomat</option>
+                            <option value="sawit" class="bg-slate-800">Kelapa Sawit</option>
+                        </select>
+                    </div>
+
+                    <!-- Input Luas Lahan -->
+                    <div class="flex items-center bg-slate-800 border border-slate-700 rounded-xl px-3 py-1.5">
+                        <i data-lucide="maximize-2" class="w-4 h-4 text-sky-400 mr-2 shrink-0"></i>
+                        <input type="number" id="area-input" value="1" min="0.01" step="0.1" class="w-16 bg-transparent text-sm font-semibold text-white focus:outline-none text-right mr-1.5" aria-label="Luas Lahan">
+                        <select id="area-unit" class="bg-transparent text-xs font-medium text-slate-300 focus:outline-none cursor-pointer border-l border-slate-700 pl-1.5">
+                            <option value="ha" class="bg-slate-800">Hektar (Ha)</option>
+                            <option value="m2" class="bg-slate-800">Meter² (m²)</option>
+                        </select>
+                    </div>
+
+                    <!-- Toggle Mode: Simulasi vs Manual -->
+                    <div class="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700">
+                        <button id="btn-mode-sim" type="button" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all bg-emerald-600 text-white shadow">
+                            <i data-lucide="radio" class="w-3.5 h-3.5"></i>
+                            <span>Simulasi</span>
+                        </button>
+                        <button id="btn-mode-manual" type="button" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-300 hover:text-white">
+                            <i data-lucide="sliders" class="w-3.5 h-3.5"></i>
+                            <span>Kalibrasi Manual</span>
+                        </button>
+                    </div>
+
+                    <!-- Tombol Integrasi ESP32 -->
+                    <button id="btn-open-esp32" type="button" class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/35 transition">
+                        <i data-lucide="code-2" class="w-4 h-4"></i>
+                        <span>Integrasi ESP32</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Dashboard Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Panel Kontrol Manual (Tampil saat mode Input Manual aktif) -->
+        <section id="manual-control-panel" class="hidden bg-white border-2 border-amber-300/80 rounded-2xl p-5 shadow-sm transition-all">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 mb-4 border-b border-slate-100">
+                <div class="flex items-center gap-2.5">
+                    <span class="p-2 bg-amber-100 text-amber-700 rounded-xl">
+                        <i data-lucide="wrench" class="w-5 h-5"></i>
+                    </span>
+                    <div>
+                        <h2 class="font-display font-bold text-slate-800 text-base">Mode Kalibrasi &amp; Pengujian Sensor Manual</h2>
+                        <p class="text-xs text-slate-500">Geser slider atau gunakan preset cepat untuk menguji kalkulasi rekomendasi pupuk Smart Soil.</p>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" onclick="applyPreset('asam')" class="px-3 py-1.5 text-xs font-medium bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-lg transition">Preset: Tanah Masam &amp; Kering</button>
+                    <button type="button" onclick="applyPreset('optimal')" class="px-3 py-1.5 text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition">Preset: Kondisi Ideal</button>
+                    <button type="button" onclick="applyPreset('basa')" class="px-3 py-1.5 text-xs font-medium bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition">Preset: Tanah Basa &amp; Jenuh</button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Slider Kelembapan -->
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200/70">
+                    <div class="flex justify-between items-center mb-2">
+                        <label for="slider-moisture" class="text-xs font-semibold uppercase tracking-wider text-slate-600">Kelembapan Tanah (%)</label>
+                        <span id="val-slider-moisture" class="text-sm font-bold text-sky-600 bg-sky-100 px-2 py-0.5 rounded-md">65%</span>
+                    </div>
+                    <input type="range" id="slider-moisture" min="0" max="100" step="1" value="65" class="w-full cursor-pointer">
+                    <div class="flex justify-between text-[11px] text-slate-400 mt-1">
+                        <span>0% (Kering Kerontang)</span>
+                        <span>50%</span>
+                        <span>100% (Jenuh Air)</span>
+                    </div>
+                </div>
+
+                <!-- Slider Suhu -->
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200/70">
+                    <div class="flex justify-between items-center mb-2">
+                        <label for="slider-temp" class="text-xs font-semibold uppercase tracking-wider text-slate-600">Suhu Tanah (°C)</label>
+                        <span id="val-slider-temp" class="text-sm font-bold text-amber-600 bg-amber-100 px-2 py-0.5 rounded-md">27.5°C</span>
+                    </div>
+                    <input type="range" id="slider-temp" min="10" max="45" step="0.5" value="27.5" class="w-full cursor-pointer">
+                    <div class="flex justify-between text-[11px] text-slate-400 mt-1">
+                        <span>10°C (Dingin)</span>
+                        <span>28°C</span>
+                        <span>45°C (Sangat Panas)</span>
+                    </div>
+                </div>
+
+                <!-- Slider pH -->
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200/70">
+                    <div class="flex justify-between items-center mb-2">
+                        <label for="slider-ph" class="text-xs font-semibold uppercase tracking-wider text-slate-600">Derajat Keasaman (pH)</label>
+                        <span id="val-slider-ph" class="text-sm font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-md">6.4</span>
+                    </div>
+                    <input type="range" id="slider-ph" min="3.5" max="9.0" step="0.1" value="6.4" class="w-full cursor-pointer">
+                    <div class="flex justify-between text-[11px] text-slate-400 mt-1">
+                        <span>3.5 (Sangat Masam)</span>
+                        <span>6.5 (Netral)</span>
+                        <span>9.0 (Basa)</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 1: Kartu Monitoring Sensor (3 Gauge Cards) -->
+        <section class="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <!-- Card 1: Kelembapan Tanah -->
+            <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 flex flex-col justify-between relative overflow-hidden">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Sensor Soil Moisture</span>
+                        <h3 class="font-display font-bold text-slate-800 text-lg mt-0.5">Kelembapan Tanah</h3>
+                    </div>
+                    <div class="p-2.5 rounded-xl bg-sky-50 text-sky-600">
+                        <i data-lucide="droplets" class="w-5 h-5"></i>
+                    </div>
+                </div>
+
+                <!-- Circular SVG Gauge -->
+                <div class="my-4 flex items-center justify-center relative">
+                    <svg class="w-36 h-36 transform -rotate-90" viewBox="0 0 120 120">
+                        <circle cx="60" cy="60" r="50" stroke="#f1f5f9" stroke-width="11" fill="none" />
+                        <circle id="gauge-moisture" cx="60" cy="60" r="50" stroke="#0284c7" stroke-width="11" stroke-linecap="round" fill="none"
+                            stroke-dasharray="314.16" stroke-dashoffset="110" class="gauge-transition" />
+                    </svg>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                        <span id="display-moisture" class="font-display font-extrabold text-3xl text-slate-800">65%</span>
+                        <span class="text-[11px] font-medium text-slate-400">Kadar Air (VWC)</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between pt-3 border-t border-slate-100">
+                    <span id="target-moisture" class="text-xs text-slate-500">Target: 60% – 80%</span>
+                    <span id="badge-moisture" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">Optimal</span>
+                </div>
+            </div>
+
+            <!-- Card 2: Suhu Tanah -->
+            <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 flex flex-col justify-between relative overflow-hidden">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Sensor DS18B20 Soil</span>
+                        <h3 class="font-display font-bold text-slate-800 text-lg mt-0.5">Suhu Tanah</h3>
+                    </div>
+                    <div class="p-2.5 rounded-xl bg-amber-50 text-amber-600">
+                        <i data-lucide="thermometer" class="w-5 h-5"></i>
+                    </div>
+                </div>
+
+                <!-- Circular SVG Gauge -->
+                <div class="my-4 flex items-center justify-center relative">
+                    <svg class="w-36 h-36 transform -rotate-90" viewBox="0 0 120 120">
+                        <circle cx="60" cy="60" r="50" stroke="#f1f5f9" stroke-width="11" fill="none" />
+                        <circle id="gauge-temp" cx="60" cy="60" r="50" stroke="#f59e0b" stroke-width="11" stroke-linecap="round" fill="none"
+                            stroke-dasharray="314.16" stroke-dashoffset="150" class="gauge-transition" />
+                    </svg>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                        <span id="display-temp" class="font-display font-extrabold text-3xl text-slate-800">27.5°C</span>
+                        <span class="text-[11px] font-medium text-slate-400">Zona Perakaran</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between pt-3 border-t border-slate-100">
+                    <span id="target-temp" class="text-xs text-slate-500">Target: 22°C – 32°C</span>
+                    <span id="badge-temp" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">Optimal</span>
+                </div>
+            </div>
+
+            <!-- Card 3: pH Tanah -->
+            <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 flex flex-col justify-between relative overflow-hidden">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Sensor pH Probe</span>
+                        <h3 class="font-display font-bold text-slate-800 text-lg mt-0.5">pH Tanah</h3>
+                    </div>
+                    <div class="p-2.5 rounded-xl bg-emerald-50 text-emerald-600">
+                        <i data-lucide="flask-conical" class="w-5 h-5"></i>
+                    </div>
+                </div>
+
+                <!-- Circular SVG Gauge -->
+                <div class="my-4 flex items-center justify-center relative">
+                    <svg class="w-36 h-36 transform -rotate-90" viewBox="0 0 120 120">
+                        <circle cx="60" cy="60" r="50" stroke="#f1f5f9" stroke-width="11" fill="none" />
+                        <circle id="gauge-ph" cx="60" cy="60" r="50" stroke="#10b981" stroke-width="11" stroke-linecap="round" fill="none"
+                            stroke-dasharray="314.16" stroke-dashoffset="130" class="gauge-transition" />
+                    </svg>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                        <span id="display-ph" class="font-display font-extrabold text-3xl text-slate-800">6.4</span>
+                        <span class="text-[11px] font-medium text-slate-400">Skala 3.5 – 9.0</span>
+                    </div>
+                </div>
+
+                <!-- Spektrum Warna Asam - Netral - Basa -->
+                <div class="mb-3">
+                    <div class="relative h-2 w-full rounded-full bg-gradient-to-r from-rose-500 via-emerald-500 to-indigo-600">
+                        <span id="ph-spectrum-marker" class="absolute -top-1 w-4 h-4 rounded-full bg-white border-2 border-slate-800 shadow transition-all duration-500" style="left: 52%;"></span>
+                    </div>
+                    <div class="flex justify-between text-[10px] font-medium text-slate-400 mt-1">
+                        <span>Asam (3.5)</span>
+                        <span>Netral (6.5)</span>
+                        <span>Basa (9.0)</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between pt-3 border-t border-slate-100">
+                    <span id="target-ph" class="text-xs text-slate-500">Target: 5.5 – 7.0</span>
+                    <span id="badge-ph" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">Netral / Ideal</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 2: Mesin Rekomendasi Pupuk & Dosis + Grafik Tren Historis -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Kolom Kiri (7 Kolom): Mesin Rekomendasi Agronomi Cerdas -->
+            <div class="lg:col-span-7 bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden flex flex-col">
+                <div class="bg-gradient-to-r from-emerald-800 to-teal-800 px-6 py-4 text-white flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex items-center gap-2.5">
+                        <div class="bg-white/15 p-2 rounded-xl">
+                            <i data-lucide="sparkles" class="w-5 h-5 text-emerald-300"></i>
+                        </div>
+                        <div>
+                            <h2 class="font-display font-bold text-base sm:text-lg">Smart Fertilizer Engine — Rekomendasi Pupuk</h2>
+                            <p class="text-xs text-emerald-100/80">Kalkulasi dosis presisi berbasis rule-engine agronomi &amp; telemetri Smart Soil</p>
+                        </div>
+                    </div>
+                    <span id="rec-area-badge" class="text-xs font-semibold bg-black/25 px-3 py-1.5 rounded-lg border border-white/15">
+                        Luas: 1.00 Ha (10.000 m²)
+                    </span>
+                </div>
+
+                <div class="p-6 space-y-5 flex-1">
+                    <!-- Ringkasan Status Kondisi Lahan -->
+                    <div id="agronomy-alert-box" class="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-start gap-3">
+                        <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-600 shrink-0 mt-0.5"></i>
+                        <div class="text-sm">
+                            <p class="font-semibold" id="agronomy-summary-title">Kondisi Tanah Mendukung Penyerapan Hara Optimal</p>
+                            <p class="text-xs text-emerald-800/90 mt-0.5 leading-relaxed" id="agronomy-summary-desc">
+                                pH tanah berada pada rentang ideal sehingga unsur makro (N, P, K) dapat diserap akar secara maksimal.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- 1. Rekomendasi Koreksi pH (Pembenah Tanah) -->
+                    <div>
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5 flex items-center gap-1.5">
+                            <i data-lucide="scale" class="w-3.5 h-3.5 text-slate-500"></i>
+                            1. Pembenah Tanah & Koreksi pH
+                        </h3>
+                        <div id="ph-correction-card" class="p-4 rounded-xl border border-slate-200 bg-slate-50/70">
+                            <!-- Diisi dinamis oleh JS -->
+                        </div>
+                    </div>
+
+                    <!-- 2. Rekomendasi Pemupukan Utama (NPK / Tunggal) -->
+                    <div>
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5 flex items-center gap-1.5">
+                            <i data-lucide="package-check" class="w-3.5 h-3.5 text-slate-500"></i>
+                            2. Kebutuhan Pupuk Utama Komoditas (<span id="rec-crop-name" class="text-emerald-700">Padi Sawah</span>)
+                        </h3>
+                        <div id="main-fertilizer-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <!-- Diisi dinamis oleh JS -->
+                        </div>
+                    </div>
+
+                    <!-- 3. Saran Irigasi & Waktu Aplikasi -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        <div class="p-3.5 rounded-xl bg-sky-50/70 border border-sky-200/80">
+                            <div class="flex items-center gap-2 text-sky-800 font-semibold text-xs mb-1">
+                                <i data-lucide="cloud-rain" class="w-4 h-4 text-sky-600"></i>
+                                <span>Manajemen Penyiraman / Irigasi</span>
+                            </div>
+                            <p id="irrigation-advice" class="text-xs text-slate-700 leading-relaxed">
+                                Kelembapan tanah optimal. Pertahankan interval penyiraman rutin sesuai fase vegetatif.
+                            </p>
+                        </div>
+
+                        <div class="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/80">
+                            <div class="flex items-center gap-2 text-amber-800 font-semibold text-xs mb-1">
+                                <i data-lucide="clock" class="w-4 h-4 text-amber-600"></i>
+                                <span>Waktu & Metode Aplikasi</span>
+                            </div>
+                            <p id="application-timing" class="text-xs text-slate-700 leading-relaxed">
+                                Aplikasikan pupuk pada pagi hari (06.00–09.00) atau sore hari saat tanah lembap agar penguapan minimal.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Kolom Kanan (5 Kolom): Grafik Tren Historis Sensor -->
+            <div class="lg:col-span-5 bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-1">
+                        <div>
+                            <h2 class="font-display font-bold text-slate-800 text-base sm:text-lg">Grafik Tren Telemetri Sensor</h2>
+                            <p class="text-xs text-slate-500">Pembaruan real-time 15 titik pembacaan terakhir</p>
+                        </div>
+                        <button type="button" id="btn-reset-chart" class="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition" title="Reset Grafik">
+                            <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Canvas Chart.js -->
+                <div class="relative w-full h-72 sm:h-80 my-3">
+                    <canvas id="sensorChart"></canvas>
+                </div>
+
+                <!-- Legend Keterangan Skala -->
+                <div class="bg-slate-50 rounded-xl p-3 border border-slate-100 text-[11px] text-slate-500 flex flex-wrap items-center justify-between gap-2">
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-sky-500"></span> Kelembapan (%)</span>
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Suhu (°C)</span>
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> pH Tanah (Sumbu Kanan)</span>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Section 3: Tabel Log Data Sensor & Ekspor CSV -->
+        <section class="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                    <h2 class="font-display font-bold text-slate-800 text-base sm:text-lg">Log Riwayat Sensor & Keputusan Pupuk</h2>
+                    <p class="text-xs text-slate-500">Rekaman telemetri otomatis lengkap dengan rekomendasi tindakan agronomi</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" id="btn-record-now" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
+                        <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                        <span>Catat Log Sekarang</span>
+                    </button>
+                    <button type="button" id="btn-export-csv" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition">
+                        <i data-lucide="download" class="w-4 h-4"></i>
+                        <span>Ekspor CSV</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50/90 border-b border-slate-200/80 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                            <th class="py-3 px-4">Waktu</th>
+                            <th class="py-3 px-4">Komoditas</th>
+                            <th class="py-3 px-4">Kelembapan</th>
+                            <th class="py-3 px-4">Suhu</th>
+                            <th class="py-3 px-4">pH Tanah</th>
+                            <th class="py-3 px-4">Tindakan Koreksi pH</th>
+                            <th class="py-3 px-4">Rekomendasi Pupuk Utama</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sensor-log-tbody" class="divide-y divide-slate-100 text-xs sm:text-sm">
+                        <!-- Baris log diisi secara dinamis oleh JS -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center text-xs text-slate-400">
+        AgroSense IoT Smart Agriculture Dashboard &bull; Sistem Pendukung Keputusan Pemupukan Presisi
+    </footer>
+
+    <!-- Application Logic -->
+    <script>
+        // Inisialisasi ikon Lucide
+        lucide.createIcons();
+
+        // ==========================================
+        // 1. DATABASE PROFIL AGRONOMI KOMODITAS
+        // ==========================================
+        const CROP_PROFILES = {
+            padi: {
+                name: 'Padi Sawah',
+                moisture: { min: 65, max: 85, ideal: 75 },
+                temp: { min: 22, max: 32, ideal: 27 },
+                ph: { min: 5.5, max: 7.0, ideal: 6.2 },
+                fertilizers: [
+                    { name: 'Urea (46% N)', baseDose: 250, unit: 'kg/ha', role: 'Pertumbuhan vegetatif & anakan produktif' },
+                    { name: 'SP-36 (36% P₂O₅)', baseDose: 100, unit: 'kg/ha', role: 'Perkembangan akar & pengisian bulir' },
+                    { name: 'KCl / MOP (60% K₂O)', baseDose: 100, unit: 'kg/ha', role: 'Ketahanan rebah & bobot gabah' }
+                ],
+                timing: 'Berikan 1/3 dosis Urea + seluruh SP-36 saat tanam/7 HST, susulan ke-2 umur 25 HST, dan ke-3 umur 40 HST.'
+            },
+            cabai: {
+                name: 'Cabai Merah',
+                moisture: { min: 55, max: 75, ideal: 65 },
+                temp: { min: 20, max: 30, ideal: 25 },
+                ph: { min: 6.0, max: 6.8, ideal: 6.4 },
+                fertilizers: [
+                    { name: 'NPK Mutiara (16-16-16)', baseDose: 400, unit: 'kg/ha', role: 'Nutrisi seimbang fase vegetatif & generatif' },
+                    { name: 'KNO₃ Putih / KCl', baseDose: 150, unit: 'kg/ha', role: 'Pembungaan, pembentukan buah & anti rontok' },
+                    { name: 'Pupuk Organik / Kompos', baseDose: 2000, unit: 'kg/ha', role: 'Memperbaiki struktur & mikroba tanah' }
+                ],
+                timing: 'Kocor atau tugal setiap 10–14 hari sekali. Hindari pemupukan saat terik matahari di atas 32°C.'
+            },
+            jagung: {
+                name: 'Jagung Hibrida',
+                moisture: { min: 50, max: 70, ideal: 60 },
+                temp: { min: 21, max: 32, ideal: 26 },
+                ph: { min: 5.8, max: 7.0, ideal: 6.3 },
+                fertilizers: [
+                    { name: 'Urea (46% N)', baseDose: 300, unit: 'kg/ha', role: 'Pembentukan batang kokoh & daun hijau' },
+                    { name: 'NPK Phonska (15-15-15)', baseDose: 250, unit: 'kg/ha', role: 'Pembentukan tongkol & pengisian biji penuh' }
+                ],
+                timing: 'Pupuk dasar saat 7–10 HST, susulan pertama 28–30 HST (fase V8), dan susulan kedua 45 HST.'
+            },
+            tomat: {
+                name: 'Tomat',
+                moisture: { min: 60, max: 75, ideal: 68 },
+                temp: { min: 18, max: 28, ideal: 23 },
+                ph: { min: 6.0, max: 6.8, ideal: 6.4 },
+                fertilizers: [
+                    { name: 'NPK Grower (15-09-20)', baseDose: 350, unit: 'kg/ha', role: 'Kualitas rasa, warna & ukuran buah tomat' },
+                    { name: 'Kalsium Nitrat (CaNO₃)', baseDose: 120, unit: 'kg/ha', role: 'Mencegah busuk pantat buah (Blossom End Rot)' }
+                ],
+                timing: 'Aplikasikan secara kocor di sekitar perakaran (jarak 10 cm dari batang) setiap minggu.'
+            },
+            sawit: {
+                name: 'Kelapa Sawit',
+                moisture: { min: 55, max: 80, ideal: 68 },
+                temp: { min: 24, max: 33, ideal: 28 },
+                ph: { min: 5.0, max: 6.5, ideal: 5.8 },
+                fertilizers: [
+                    { name: 'NPK Majemuk (13-6-27-4)', baseDose: 450, unit: 'kg/ha', role: 'Produktivitas Tandan Buah Segar (TBS)' },
+                    { name: 'Kieserite (MgSO₄)', baseDose: 150, unit: 'kg/ha', role: 'Mencegah daun menguning (defisiensi Magnesium)' }
+                ],
+                timing: 'Tabur merata di piringan (jarak 1.5 – 2.5 m dari pangkal batang) saat awal & akhir musim hujan.'
+            }
+        };
+
+        // ==========================================
+        // 2. STATE APLIKASI
+        // ==========================================
+        const state = {
+            mode: 'simulation', // 'simulation' | 'manual'
+            cropKey: 'padi',
+            areaValue: 1.0,
+            areaUnit: 'ha', // 'ha' | 'm2'
+            sensor: {
+                moisture: 68,
+                temp: 27.2,
+                ph: 6.2
+            },
+            logs: [],
+            simInterval: null
+        };
+
+        // ==========================================
+        // 3. ELEMEN DOM
+        // ==========================================
+        const el = {
+            cropSelect: document.getElementById('crop-select'),
+            areaInput: document.getElementById('area-input'),
+            areaUnit: document.getElementById('area-unit'),
+            btnModeSim: document.getElementById('btn-mode-sim'),
+            btnModeManual: document.getElementById('btn-mode-manual'),
+            manualPanel: document.getElementById('manual-control-panel'),
+            connBadge: document.getElementById('connection-badge'),
+            connText: document.getElementById('connection-text'),
+
+            // Sliders
+            sliderMoisture: document.getElementById('slider-moisture'),
+            sliderTemp: document.getElementById('slider-temp'),
+            sliderPh: document.getElementById('slider-ph'),
+            valSliderMoisture: document.getElementById('val-slider-moisture'),
+            valSliderTemp: document.getElementById('val-slider-temp'),
+            valSliderPh: document.getElementById('val-slider-ph'),
+
+            // Gauges & Displays
+            gaugeMoisture: document.getElementById('gauge-moisture'),
+            displayMoisture: document.getElementById('display-moisture'),
+            targetMoisture: document.getElementById('target-moisture'),
+            badgeMoisture: document.getElementById('badge-moisture'),
+
+            gaugeTemp: document.getElementById('gauge-temp'),
+            displayTemp: document.getElementById('display-temp'),
+            targetTemp: document.getElementById('target-temp'),
+            badgeTemp: document.getElementById('badge-temp'),
+
+            gaugePh: document.getElementById('gauge-ph'),
+            displayPh: document.getElementById('display-ph'),
+            targetPh: document.getElementById('target-ph'),
+            badgePh: document.getElementById('badge-ph'),
+
+            // Recommendation Engine UI
+            recAreaBadge: document.getElementById('rec-area-badge'),
+            recCropName: document.getElementById('rec-crop-name'),
+            alertBox: document.getElementById('agronomy-alert-box'),
+            summaryTitle: document.getElementById('agronomy-summary-title'),
+            summaryDesc: document.getElementById('agronomy-summary-desc'),
+            phCorrectionCard: document.getElementById('ph-correction-card'),
+            mainFertilizerGrid: document.getElementById('main-fertilizer-grid'),
+            irrigationAdvice: document.getElementById('irrigation-advice'),
+            applicationTiming: document.getElementById('application-timing'),
+
+            // Logs & Actions
+            logTbody: document.getElementById('sensor-log-tbody'),
+            btnExportCsv: document.getElementById('btn-export-csv'),
+            btnRecordNow: document.getElementById('btn-record-now'),
+            btnResetChart: document.getElementById('btn-reset-chart')
+        };
+
+        // ==========================================
+        // 4. INISIALISASI CHART.JS
+        // ==========================================
+        const ctx = document.getElementById('sensorChart').getContext('2d');
+        const sensorChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Kelembapan (%)',
+                        data: [],
+                        borderColor: '#0284c7',
+                        backgroundColor: 'rgba(2, 132, 199, 0.1)',
+                        borderWidth: 2.5,
+                        tension: 0.35,
+                        fill: true,
+                        pointRadius: 3,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Suhu (°C)',
+                        data: [],
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245, 158, 11, 0.05)',
+                        borderWidth: 2.5,
+                        tension: 0.35,
+                        pointRadius: 3,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'pH Tanah',
+                        data: [],
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.05)',
+                        borderWidth: 2.5,
+                        borderDash: [4, 4],
+                        tension: 0.35,
+                        pointRadius: 3,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        backgroundColor: '#0f172a',
+                        padding: 10,
+                        cornerRadius: 8
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { font: { size: 10 }, color: '#64748b', maxRotation: 0 }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        min: 0,
+                        max: 100,
+                        grid: { color: '#f1f5f9' },
+                        ticks: { font: { size: 10 }, color: '#64748b' }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        min: 3.5,
+                        max: 9.0,
+                        grid: { drawOnChartArea: false },
+                        ticks: { font: { size: 10 }, color: '#059669' }
+                    }
+                }
+            }
+        });
+// ... existing code ... -->
+        function formatNumber(num) {
+            return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 }).format(num);
+        }
+
+        function formatWeight(kgValue) {
+            if (kgValue > 0 && kgValue < 1) {
+                return `${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(kgValue * 1000)} gram`;
+            }
+            return `${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 }).format(kgValue)} kg`;
+        }
+
+        function getTimeNow() {
+// ... existing code ... -->
+            // --- A. Evaluasi Status Sensor ---
+            let moistureStatus = 'Optimal';
+            if (moisture < profile.moisture.min) moistureStatus = 'Kering';
+            else if (moisture > profile.moisture.max) moistureStatus = 'Basah / Jenuh';
+
+            let tempStatus = 'Optimal';
+            if (temp < profile.temp.min) tempStatus = 'Dingin';
+            else if (temp > profile.temp.max) tempStatus = 'Panas';
+
+            let phStatus = 'Netral / Ideal';
+            if (ph < 5.0) phStatus = 'Sangat Masam';
+            else if (ph < profile.ph.min) phStatus = 'Agak Masam';
+            else if (ph > 7.6) phStatus = 'Basa';
+            else if (ph > profile.ph.max) phStatus = 'Agak Basa';
+
+            // --- B. Kalkulasi Koreksi pH (Pembenah Tanah) ---
+            let phActionShort = 'Tidak perlu kapur/belerang';
+            let phHtml = '';
+
+            if (ph < profile.ph.min) {
+                // Tanah masam -> Butuh Kapur Pertanian (Dolomit CaMg(CO3)2)
+                // Rumus agronomi praktis: selisih pH * 1.500 - 2.000 kg/ha tergantung tingkat kemasaman
+                const deltaPh = Math.max(0.2, profile.ph.ideal - ph);
+                const factor = ph < 5.0 ? 2200 : 1500;
+                const dosePerHa = Math.round((deltaPh * factor) / 50) * 50; // pembulatan kelipatan 50 kg
+                const totalNeeded = dosePerHa * areaHa;
+                phActionShort = `Dolomit ${formatNumber(dosePerHa)} kg/ha`;
+
+                phHtml = `
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="px-2 py-0.5 text-[11px] font-bold rounded bg-rose-100 text-rose-700">pH Rendah (${ph.toFixed(1)})</span>
+                                <h4 class="font-bold text-slate-800 text-sm">Kapur Pertanian / Dolomit (CaMg(CO₃)₂)</h4>
+                            </div>
+                            <p class="text-xs text-slate-600 mt-1">
+                                Menaikkan pH menuju target <strong>${profile.ph.ideal}</strong> agar unsur Fosfor (P) tidak terikat oleh Aluminium/Besi. Taburkan 2 minggu sebelum pemupukan NPK.
+                            </p>
+                        </div>
+                        <div class="sm:text-right shrink-0 bg-white px-3.5 py-2 rounded-xl border border-rose-200">
+                            <div class="text-xs text-slate-500">Dosis: <strong>${formatNumber(dosePerHa)} kg/ha</strong></div>
+                            <div class="text-sm font-extrabold text-rose-700">Total: ${formatWeight(totalNeeded)}</div>
+                        </div>
+                    </div>
+                `;
+            } else if (ph > profile.ph.max) {
+                // Tanah basa -> Butuh Belerang (Sulfur) atau Pupuk ZA (Amonium Sulfat)
+                const deltaPh = Math.max(0.2, ph - profile.ph.ideal);
+                const dosePerHa = Math.round((deltaPh * 450) / 25) * 25;
+                const totalNeeded = dosePerHa * areaHa;
+                phActionShort = `Belerang/ZA ${formatNumber(dosePerHa)} kg/ha`;
+
+                phHtml = `
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="px-2 py-0.5 text-[11px] font-bold rounded bg-indigo-100 text-indigo-700">pH Tinggi (${ph.toFixed(1)})</span>
+                                <h4 class="font-bold text-slate-800 text-sm">Belerang Pertanian (Sulfur) / Pupuk ZA</h4>
+                            </div>
+                            <p class="text-xs text-slate-600 mt-1">
+                                Menurunkan alkalinitas tanah menuju <strong>${profile.ph.ideal}</strong> untuk mencegah defisiensi unsur mikro (Fe, Mn, Zn).
+                            </p>
+                        </div>
+                        <div class="sm:text-right shrink-0 bg-white px-3.5 py-2 rounded-xl border border-indigo-200">
+                            <div class="text-xs text-slate-500">Dosis: <strong>${formatNumber(dosePerHa)} kg/ha</strong></div>
+                            <div class="text-sm font-extrabold text-indigo-700">Total: ${formatWeight(totalNeeded)}</div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                phHtml = `
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="flex items-center gap-2.5">
+                            <span class="p-1.5 rounded-lg bg-emerald-100 text-emerald-700">
+                                <i data-lucide="check" class="w-4 h-4"></i>
+                            </span>
+                            <div>
+                                <h4 class="font-semibold text-slate-800 text-sm">Tidak Diperlukan Koreksi pH (pH ${ph.toFixed(1)} Optimal)</h4>
+                                <p class="text-xs text-slate-500">Ketersediaan hara makro & mikro berada pada titik puncak. Langsung lanjutkan pemupukan berimbang.</p>
+                            </div>
+                        </div>
+                        <span class="text-xs font-bold text-emerald-700 bg-emerald-100/80 px-2.5 py-1 rounded-lg shrink-0">0 kg/ha</span>
+                    </div>
+                `;
+            }
+            el.phCorrectionCard.innerHTML = phHtml;
+
+            // --- C. Penyesuaian Dosis Pupuk Utama Berdasarkan Kondisi Sensor ---
+            // Faktor koreksi: jika terlalu kering atau suhu ekstrem, efisiensi serapan turun sehingga disarankan split-dose (pengurangan dosis per aplikasi)
+            let doseMultiplier = 1.0;
+            let doseNote = '';
+            if (moisture < profile.moisture.min) {
+                doseMultiplier = 0.75; // Kurangi 25% per aplikasi saat kering agar tidak plasmolisis (akar terbakar)
+                doseNote = 'Dosis dikurangi 25% per aplikasi karena tanah kering (cegah akar terbakar).';
+            } else if (moisture > profile.moisture.max) {
+                doseMultiplier = 0.80; // Kurangi 20% saat terlalu basah untuk cegah pencucian (leaching)
+                doseNote = 'Dosis dikurangi 20% & wajib sistem benam/tugal karena risiko pencucian hara tinggi.';
+            } else if (temp > profile.temp.max) {
+                doseMultiplier = 0.85;
+                doseNote = 'Suhu tanah tinggi: hindari penaburan Urea di permukaan tanpa ditutup tanah.';
+            }
+
+            let fertCardsHtml = '';
+            const fertSummaryList = [];
+
+            profile.fertilizers.forEach(fert => {
+                const adjustedDose = Math.round(fert.baseDose * doseMultiplier);
+                const totalKg = adjustedDose * areaHa;
+                fertSummaryList.push(`${fert.name.split(' ')[0]} ${formatWeight(totalKg)}`);
+
+                fertCardsHtml += `
+                    <div class="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-emerald-300 transition flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-start justify-between gap-2">
+                                <h4 class="font-bold text-slate-800 text-sm">${fert.name}</h4>
+                                <span class="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                                    ${formatNumber(adjustedDose)} ${fert.unit}
+                                </span>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-1">${fert.role}</p>
+                        </div>
+                        <div class="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
+                            <span class="text-[11px] text-slate-400">Kebutuhan Lahan Anda:</span>
+                            <span class="text-sm font-extrabold text-emerald-700">${formatWeight(totalKg)}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            el.mainFertilizerGrid.innerHTML = fertCardsHtml;
+
+            // --- D. Ringkasan Alert & Saran Irigasi ---
+            if (phStatus !== 'Netral / Ideal' || moistureStatus !== 'Optimal' || tempStatus !== 'Optimal') {
+                el.alertBox.className = 'p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 flex items-start gap-3';
+                el.summaryTitle.textContent = `Perhatian Agronomi: Tanah ${phStatus}, Kelembapan ${moistureStatus}, Suhu ${tempStatus}`;
+                el.summaryDesc.textContent = doseNote || `Lakukan koreksi parameter tanah terlebih dahulu sesuai rekomendasi di bawah agar pemupukan ${profile.name} efektif.`;
+            } else {
+                el.alertBox.className = 'p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 flex items-start gap-3';
+                el.summaryTitle.textContent = `Kondisi Lahan Ideal untuk ${profile.name}`;
+                el.summaryDesc.textContent = `Kelembapan (${moisture}%), suhu (${temp.toFixed(1)}°C), dan pH (${ph.toFixed(1)}) berada di zona optimal. Penyerapan unsur hara berjalan maksimal.`;
+            }
+
+            // Saran Irigasi
+            if (moisture < profile.moisture.min) {
+                el.irrigationAdvice.innerHTML = `<strong class="text-rose-700">Segera Lakukan Penyiraman!</strong> Kadar air (${moisture}%) di bawah batas minimum (${profile.moisture.min}%). Lakukan irigasi sebelum menabur pupuk agar pupuk larut sempurna.`;
+            } else if (moisture > profile.moisture.max) {
+                el.irrigationAdvice.innerHTML = `<strong class="text-amber-700">Hentikan Penyiraman & Buka Drainase.</strong> Tanah jenuh air (${moisture}%). Tunda pemupukan kocor hingga kelembapan turun di bawah ${profile.moisture.max}%.`;
+            } else {
+                el.irrigationAdvice.innerHTML = `<strong class="text-emerald-700">Kelembapan Terjaga (${moisture}%).</strong> Pertahankan irigasi rutin. Kondisi sangat baik untuk pelarutan granul pupuk di zona perakaran.`;
+            }
+
+            el.applicationTiming.textContent = profile.timing;
+            lucide.createIcons();
+
+            return {
+                phActionShort,
+                fertSummaryShort: fertSummaryList.join(', ')
+            };
+        }
+
+        // ==========================================
+        // 7. UPDATE VISUAL GAUGE & UI SENSOR
+        // ==========================================
+        function updateSensorUI(recordToLog = false) {
+            const profile = CROP_PROFILES[state.cropKey];
+            const { moisture, temp, ph } = state.sensor;
+            const circumference = 314.16;
+
+            // 1. Kelembapan (0 - 100%)
+            el.displayMoisture.textContent = `${Math.round(moisture)}%`;
+            el.targetMoisture.textContent = `Target: ${profile.moisture.min}% – ${profile.moisture.max}%`;
+            const offsetM = circumference - (Math.min(100, Math.max(0, moisture)) / 100) * circumference;
+            el.gaugeMoisture.style.strokeDashoffset = offsetM;
+
+            if (moisture < profile.moisture.min) {
+                el.gaugeMoisture.style.stroke = '#e11d48';
+                el.badgeMoisture.className = 'px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-700';
+                el.badgeMoisture.textContent = 'Kering';
+            } else if (moisture > profile.moisture.max) {
+                el.gaugeMoisture.style.stroke = '#2563eb';
+                el.badgeMoisture.className = 'px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700';
+                el.badgeMoisture.textContent = 'Basah / Jenuh';
+            } else {
+                el.gaugeMoisture.style.stroke = '#0284c7';
+                el.badgeMoisture.className = 'px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700';
+                el.badgeMoisture.textContent = 'Optimal';
+            }
+
+            // 2. Suhu (10 - 45°C)
+            el.displayTemp.textContent = `${temp.toFixed(1)}°C`;
+            el.targetTemp.textContent = `Target: ${profile.temp.min}°C – ${profile.temp.max}°C`;
+            const pctTemp = Math.min(100, Math.max(0, ((temp - 10) / 35) * 100));
+            el.gaugeTemp.style.strokeDashoffset = circumference - (pctTemp / 100) * circumference;
+
+            if (temp < profile.temp.min) {
+                el.gaugeTemp.style.stroke = '#0284c7';
+                el.badgeTemp.className = 'px-2.5 py-1 rounded-full text-xs font-semibold bg-sky-100 text-sky-700';
+                el.badgeTemp.textContent = 'Dingin';
+            } else if (temp > profile.temp.max) {
+            // 3. pH (3.5 - 9.0)
+            el.displayPh.textContent = ph.toFixed(1);
+            el.targetPh.textContent = `Target: ${profile.ph.min.toFixed(1)} – ${profile.ph.max.toFixed(1)}`;
+            const pctPh = Math.min(100, Math.max(0, ((ph - 3.5) / 5.5) * 100));
+            el.gaugePh.style.strokeDashoffset = circumference - (pctPh / 100) * circumference;
+
+            const phMarker = document.getElementById('ph-spectrum-marker');
+            if (phMarker) {
+                phMarker.style.left = `calc(${pctPh}% - 8px)`;
+            }
+
+            if (ph < 5.0) {
+                el.gaugePh.style.stroke = '#e11d48';
+                el.badgePh.className = 'px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-700';
+                el.badgePh.textContent = 'Sangat Masam';
+            } else if (ph < profile.ph.min) {
+                el.gaugePh.style.stroke = '#f59e0b';
+                el.badgePh.className = 'px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700';
+                el.badgePh.textContent = 'Agak Masam';
+            } else if (ph > 7.6) {
+                el.gaugePh.style.stroke = '#4f46e5';
+                el.badgePh.className = 'px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700';
+                el.badgePh.textContent = 'Basa';
+            } else if (ph > profile.ph.max) {
+                el.gaugePh.style.stroke = '#0ea5e9';
+                el.badgePh.className = 'px-2.5 py-1 rounded-full text-xs font-semibold bg-sky-100 text-sky-700';
+                el.badgePh.textContent = 'Agak Basa';
+            } else {
+                el.gaugePh.style.stroke = '#10b981';
+                el.badgePh.className = 'px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700';
+                el.badgePh.textContent = 'Netral / Ideal';
+            }
+
+            // Sinkronkan slider manual jika sedang diubah dari luar
+            el.sliderMoisture.value = Math.round(moisture);
+            el.valSliderMoisture.textContent = `${Math.round(moisture)}%`;
+            el.sliderTemp.value = temp.toFixed(1);
+            el.valSliderTemp.textContent = `${temp.toFixed(1)}°C`;
+            el.sliderPh.value = ph.toFixed(1);
+            el.valSliderPh.textContent = ph.toFixed(1);
+
+            // Hitung Rekomendasi
+            const recSummary = calculateRecommendations();
+
+            // Update Grafik & Log jika diminta
+            if (recordToLog) {
+                const timeLabel = getTimeNow();
+                pushChartData(timeLabel, moisture, temp, ph);
+                addLogEntry(timeLabel, profile.name, moisture, temp, ph, recSummary.phActionShort, recSummary.fertSummaryShort);
+            }
+        }
+
+        // ==========================================
+        // 8. GRAFIK & LOG RIWAYAT
+        // ==========================================
+        function pushChartData(label, moisture, temp, ph) {
+            const maxPoints = 15;
+            sensorChart.data.labels.push(label);
+            sensorChart.data.datasets[0].data.push(Math.round(moisture));
+            sensorChart.data.datasets[1].data.push(Number(temp.toFixed(1)));
+            sensorChart.data.datasets[2].data.push(Number(ph.toFixed(1)));
+
+            if (sensorChart.data.labels.length > maxPoints) {
+                sensorChart.data.labels.shift();
+                sensorChart.data.datasets.forEach(ds => ds.data.shift());
+            }
+            sensorChart.update('none');
+        }
+
+        function addLogEntry(time, crop, moisture, temp, ph, phAction, fertRec) {
+            const entry = {
+                time,
+                crop,
+                moisture: `${Math.round(moisture)}%`,
+                temp: `${temp.toFixed(1)}°C`,
+                ph: ph.toFixed(1),
+                phAction,
+                fertRec
+            };
+            state.logs.unshift(entry);
+            if (state.logs.length > 30) state.logs.pop();
+            renderLogTable();
+        }
+
+        function renderLogTable() {
+            el.logTbody.innerHTML = state.logs.map(row => `
+                <tr class="hover:bg-slate-50/80 transition">
+                    <td class="py-3 px-4 font-mono text-xs text-slate-500 whitespace-nowrap">${row.time}</td>
+                    <td class="py-3 px-4 font-semibold text-slate-700 whitespace-nowrap">${row.crop}</td>
+                    <td class="py-3 px-4 text-sky-700 font-medium">${row.moisture}</td>
+                    <td class="py-3 px-4 text-amber-700 font-medium">${row.temp}</td>
+                    <td class="py-3 px-4 text-emerald-700 font-bold">${row.ph}</td>
+                    <td class="py-3 px-4 text-xs text-slate-600">${row.phAction}</td>
+                    <td class="py-3 px-4 text-xs font-medium text-slate-800">${row.fertRec}</td>
+                </tr>
+            `).join('');
+        }
+
+        function exportLogsToCSV() {
+            if (state.logs.length === 0) {
+                showToast('Belum ada data log untuk diekspor.', 'warning');
+                return;
+            }
+            const headers = ['Waktu', 'Komoditas', 'Kelembapan Tanah', 'Suhu Tanah', 'pH Tanah', 'Koreksi pH', 'Rekomendasi Pupuk Utama'];
+            const rows = state.logs.map(r => [
+                r.time,
+                `"${r.crop}"`,
+                r.moisture,
+                r.temp,
+                r.ph,
+                `"${r.phAction}"`,
+                `"${r.fertRec}"`
+            ]);
+
+            const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement('a');
+            link.setAttribute('href', encodedUri);
+            link.setAttribute('download', 'smart-soil-log.csv');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast('File smart-soil-log.csv berhasil diunduh!');
+        }
+
+        // ==========================================
+        // 9. SIMULASI REAL-TIME & MODE CONTROL
+        // ==========================================
+        function stepSimulation() {
+            // Fluktuasi realistis (random walk halus)
+            const deltaM = (Math.random() - 0.48) * 3.2;
+            const deltaT = (Math.random() - 0.5) * 0.6;
+            const deltaPh = (Math.random() - 0.5) * 0.14;
+
+            state.sensor.moisture = Math.min(98, Math.max(15, state.sensor.moisture + deltaM));
+            state.sensor.temp = Math.min(42, Math.max(14, state.sensor.temp + deltaT));
+            state.sensor.ph = Math.min(8.5, Math.max(4.0, state.sensor.ph + deltaPh));
+
+            updateSensorUI(true);
+        }
+
+        function setMode(newMode) {
+            state.mode = newMode;
+            if (newMode === 'simulation') {
+                el.btnModeSim.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-emerald-600 text-white shadow';
+                el.btnModeManual.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-300 hover:text-white';
+                el.manualPanel.classList.add('hidden');
+                el.connBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+                el.connText.textContent = 'Live Telemetry';
+
+                if (!state.simInterval) {
+                    state.simInterval = setInterval(stepSimulation, 3000);
+                }
+                showToast('Mode Simulasi Real-Time aktif (update tiap 3 detik).');
+            } else {
+                el.btnModeManual.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-amber-500 text-slate-900 shadow';
+                el.btnModeSim.className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-300 hover:text-white';
+                el.manualPanel.classList.remove('hidden');
+                el.connBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30';
+                el.connText.textContent = 'Manual Override';
+
+                if (state.simInterval) {
+                    clearInterval(state.simInterval);
+                    state.simInterval = null;
+                }
+                showToast('Mode Input Manual aktif. Gunakan slider untuk menguji skenario.', 'warning');
+            }
+        }
+
+        // Fungsi Preset untuk pengujian cepat di Mode Manual
+        window.applyPreset = function(type) {
+            if (type === 'asam') {
+                state.sensor = { moisture: 32, temp: 31.5, ph: 4.6 };
+            } else if (type === 'optimal') {
+                const p = CROP_PROFILES[state.cropKey];
+                state.sensor = { moisture: p.moisture.ideal, temp: p.temp.ideal, ph: p.ph.ideal };
+            } else if (type === 'basa') {
+                state.sensor = { moisture: 88, temp: 34.5, ph: 7.9 };
+            }
+            updateSensorUI(true);
+        };
+
+        // ==========================================
+        // 10. EVENT LISTENERS
+        // ==========================================
+        el.cropSelect.addEventListener('change', (e) => {
+            state.cropKey = e.target.value;
+            updateSensorUI(true);
+            showToast(`Komoditas diubah ke ${CROP_PROFILES[state.cropKey].name}`);
+        });
+
+        el.areaInput.addEventListener('input', (e) => {
+            state.areaValue = e.target.value;
+            calculateRecommendations();
+        });
+
+        el.areaUnit.addEventListener('change', (e) => {
+            state.areaUnit = e.target.value;
+            calculateRecommendations();
+        });
+
+        el.btnModeSim.addEventListener('click', () => setMode('simulation'));
+        el.btnModeManual.addEventListener('click', () => setMode('manual'));
+
+        // Slider Manual Events
+        el.sliderMoisture.addEventListener('input', (e) => {
+            state.sensor.moisture = parseFloat(e.target.value);
+            updateSensorUI(false);
+        });
+        el.sliderMoisture.addEventListener('change', () => updateSensorUI(true));
+
+        el.sliderTemp.addEventListener('input', (e) => {
+            state.sensor.temp = parseFloat(e.target.value);
+            updateSensorUI(false);
+        });
+        el.sliderTemp.addEventListener('change', () => updateSensorUI(true));
+
+        el.sliderPh.addEventListener('input', (e) => {
+            state.sensor.ph = parseFloat(e.target.value);
+            updateSensorUI(false);
+        });
+        el.sliderPh.addEventListener('change', () => updateSensorUI(true));
+
+        el.btnExportCsv.addEventListener('click', exportLogsToCSV);
+        el.btnRecordNow.addEventListener('click', () => {
+            updateSensorUI(true);
+            showToast('Data sensor terkini dicatat ke tabel log.');
+        });
+
+        el.btnResetChart.addEventListener('click', () => {
+            sensorChart.data.labels = [];
+            sensorChart.data.datasets.forEach(ds => ds.data = []);
+            sensorChart.update();
+            updateSensorUI(true);
+            showToast('Grafik tren telemetri di-reset.');
+        });
+
+        // Modal Integrasi ESP32
+        const esp32Modal = document.getElementById('esp32-modal');
+        document.getElementById('btn-open-esp32').addEventListener('click', () => {
+            esp32Modal.classList.remove('hidden');
+            esp32Modal.classList.add('flex');
+        });
+        document.getElementById('btn-close-esp32').addEventListener('click', () => {
+            esp32Modal.classList.add('hidden');
+            esp32Modal.classList.remove('flex');
+        });
+        esp32Modal.addEventListener('click', (e) => {
+            if (e.target === esp32Modal) {
+                esp32Modal.classList.add('hidden');
+                esp32Modal.classList.remove('flex');
+            }
+        });
+        document.getElementById('btn-copy-esp32').addEventListener('click', () => {
+            const codeEl = document.getElementById('esp32-code-block');
+            const range = document.createRange();
+            range.selectNode(codeEl);
+            window.getSelection().removeAllRanges();
+            window.getSelection().addRange(range);
+            try {
+                document.execCommand('copy');
+                showToast('Kode Arduino/ESP32 Smart Soil berhasil disalin!');
+            } catch (err) {
+                showToast('Gagal menyalin kode.', 'warning');
+            }
+            window.getSelection().removeAllRanges();
+        });
+
+        // ==========================================
+        // 11. BOOTSTRAP AWAL
+        // ==========================================
+        window.addEventListener('DOMContentLoaded', () => {
+            // Seed 5 data historis awal agar grafik langsung terlihat informatif
+            const baseMoisture = [64, 65, 67, 66, 68];
+            const baseTemp = [26.8, 27.0, 27.1, 27.3, 27.2];
+            const basePh = [6.1, 6.2, 6.2, 6.3, 6.2];
+
+            for (let i = 0; i < 5; i++) {
+                state.sensor = {
+                    moisture: baseMoisture[i],
+                    temp: baseTemp[i],
+                    ph: basePh[i]
+                };
+                updateSensorUI(true);
+            }
+
+            // Jalankan interval simulasi
+            state.simInterval = setInterval(stepSimulation, 3000);
+        });
+    </script>
+
+    <!-- Modal Integrasi Perangkat ESP32 -->
+    <div id="esp32-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-2xl w-full overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="bg-slate-900 px-6 py-4 text-white flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <div class="p-2 rounded-xl bg-emerald-500/20 text-emerald-400">
+                        <i data-lucide="cpu" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-display font-bold text-base">Integrasi Hardware ESP32 — SmartSoil-Node-01</h3>
+                        <p class="text-xs text-slate-400">Contoh firmware Arduino IDE untuk sensor Capacitive Moisture, DS18B20 &amp; pH Tanah</p>
+                    </div>
+                </div>
+                <button id="btn-close-esp32" type="button" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                    <div class="p-3 rounded-xl bg-sky-50 border border-sky-200/80">
+                        <span class="font-bold text-sky-900 block">Capacitive Soil v1.2</span>
+                        <span class="text-sky-700">Pin ADC GPIO 34</span>
+                    </div>
+                    <div class="p-3 rounded-xl bg-amber-50 border border-amber-200/80">
+                        <span class="font-bold text-amber-900 block">DS18B20 Waterproof</span>
+                        <span class="text-amber-700">OneWire GPIO 4 (+4.7kΩ)</span>
+                    </div>
+                    <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200/80">
+                        <span class="font-bold text-emerald-900 block">Analog Soil pH Probe</span>
+                        <span class="text-emerald-700">Pin ADC GPIO 35</span>
+                    </div>
+                </div>
+
+                <div class="relative">
+                    <div class="flex items-center justify-between bg-slate-800 text-slate-300 px-4 py-2 rounded-t-xl text-xs font-mono">
+                        <span>SmartSoil_Node01.ino</span>
+                        <button id="btn-copy-esp32" type="button" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-sans font-semibold transition">
+                            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                            <span>Salin Kode</span>
+                        </button>
+                    </div>
+                    <pre class="bg-slate-950 text-emerald-300 p-4 rounded-b-xl text-xs font-mono overflow-x-auto leading-relaxed"><code id="esp32-code-block">#include &lt;WiFi.h&gt;
+#include &lt;HTTPClient.h&gt;
+#include &lt;OneWire.h&gt;
+#include &lt;DallasTemperature.h&gt;
+
+// Konfigurasi WiFi &amp; Endpoint Smart Soil
+const char* ssid = "NAMA_WIFI_ANDA";
+const char* password = "PASSWORD_WIFI_ANDA";
+const char* serverUrl = "https://api.smartsoil.id/v1/telemetry";
+const char* deviceId = "SmartSoil-Node-01";
+
+// Definisi Pin Sensor ESP32
+#define PIN_MOISTURE 34
+#define PIN_PH       35
+#define PIN_DS18B20  4
+
+OneWire oneWire(PIN_DS18B20);
+DallasTemperature tempSensor(&amp;oneWire);
+
+void setup() {
+  Serial.begin(115200);
+  tempSensor.begin();
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\n[Smart Soil] Terhubung ke WiFi!");
+}
+
+void loop() {
+  // 1. Baca Kelembapan Tanah (Kalibrasi nilai kering=3200, basah=1400)
+  int rawMoisture = analogRead(PIN_MOISTURE);
+  float moisturePct = constrain(map(rawMoisture, 3200, 1400, 0, 100), 0, 100);
+
+  // 2. Baca Suhu Tanah DS18B20 (°C)
+  tempSensor.requestTemperatures();
+  float soilTemp = tempSensor.getTempCByIndex(0);
+
+  // 3. Baca pH Tanah (Konversi tegangan 0-3.3V ke skala pH 3.5-9.0)
+  float voltagePh = analogRead(PIN_PH) * (3.3 / 4095.0);
+  float soilPh = constrain(3.5 + (voltagePh * 1.65), 3.5, 9.0);
+
+  // 4. Kirim Payload JSON ke Dashboard Smart Soil
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin(serverUrl);
+    http.addHeader("Content-Type", "application/json");
+
+    String payload = "{\"device_id\":\"" + String(deviceId) + "\","
+                   + "\"moisture\":" + String(moisturePct, 1) + ","
+                   + "\"temperature\":" + String(soilTemp, 1) + ","
+                   + "\"ph\":" + String(soilPh, 2) + "}";
+
+    int httpCode = http.POST(payload);
+    Serial.printf("[Smart Soil] POST %d -> %s\n", httpCode, payload.c_str());
+    http.end();
+  }
+  delay(5000); // Kirim telemetri setiap 5 detik
+}</code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
